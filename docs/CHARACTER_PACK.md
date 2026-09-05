@@ -1,7 +1,7 @@
 # キャラクターパック仕様 v1
 
 LUNA のキャラクターは **JSON + PNG のデータのみ**で構成される。
-**パックは実行可能コードを一切含まない。** 振る舞いは本書の宣言的スキーマで表現する（[DESIGN.md §12](./DESIGN.md#12-セキュリティ) 参照）。
+**パックは実行可能コードを一切含まない。** 振る舞いは本書の宣言的スキーマで表現する（[DESIGN.md §16](./DESIGN.md#16-セキュリティとプライバシー) 参照）。
 
 ---
 
@@ -24,6 +24,7 @@ packs/<packId>/
 `packId` は `^[a-z0-9][a-z0-9_-]{1,31}$`。ディレクトリ名と `mascot.json` の `id` は一致していなければならない。
 
 インストール先は `%APPDATA%\LUNA\packs\<packId>\`。同梱パックはアプリの `resources/packs/` に置かれ、同名があればユーザー側が優先される。
+配布は**フォルダごと zip** で行う（`.lunapack` 拡張子の zip を関連付け、ドラッグ&ドロップでインストールできるようにする）。
 
 ---
 
@@ -51,18 +52,25 @@ packs/<packId>/
 }
 ```
 
-### 2.2 display — 大きさと基準点
+### 2.2 display — 大きさ・基準点・頭の位置
 
 ```jsonc
 "display": {
   "baseHeight": 128,       // dip。この高さになるようスプライトを一律スケールする
   "anchor": { "x": 0.5, "y": 1.0 },   // 基準点（0–1）。既定は「足元中央」
   "footOffset": 2,         // 基準点から実際の接地位置までのpxオフセット（影のはみ出し補正）
-  "hitPadding": 3          // ヒットマスクの膨張px（DESIGN.md §5.3 のヒステリシス用）
+  "hitPadding": 3,         // ヒットマスクの膨張px（DESIGN.md §5.3 のヒステリシス用）
+
+  "headRegion": { "x": 0.25, "y": 0.0, "w": 0.5, "h": 0.35 }
+  // ↑ なでなで判定に使う頭部矩形。フレーム全体を 0–1 とした相対座標。
+  //   省略時はスプライト上部 35% 全幅を頭とみなす。
 }
 ```
 
 `baseHeight` を基準に全アニメが同じ倍率でスケールされるため、フレーム間で身長が揺れない。
+
+**`headRegion` はなでなでの気持ちよさを左右する。** 広すぎると体を触っても反応してしまい、狭すぎると認識されない。
+実際に描いた頭の輪郭より**やや小さめ**に取るのが良い（DESIGN.md §10.1）。
 
 ### 2.3 sprite — アトラス参照
 
@@ -119,15 +127,17 @@ packs/<packId>/
     "frames": ["walk_00", "walk_01", "walk_02", "walk_03"],
     "fps": 10,
     "loop": true,
-    "moveSpeed": 42,          // dip/s。歩行系のみ有効
+    "moveSpeed": 42,          // dip/s。移動系のみ有効
     "events": [
       { "atFrame": 0, "sound": "sounds/step.ogg", "volume": 0.3 },
       { "atFrame": 2, "sound": "sounds/step.ogg", "volume": 0.3 }
     ]
   },
-  "drag": { "frames": ["drag_00", "drag_01"], "fps": 8, "loop": true },
-  "fall": { "frames": ["fall_00"], "fps": 1, "loop": true },
-  "land": { "frames": ["land_00", "land_01", "idle_00"], "fps": 12, "loop": false }
+  "climb": { "frames": ["climb_00", "climb_01", "climb_02"], "fps": 8, "loop": true, "moveSpeed": 28 },
+  "hang":  { "frames": ["hang_00", "hang_01"], "fps": 3, "loop": true },
+  "drag":  { "frames": ["drag_00", "drag_01"], "fps": 8, "loop": true },
+  "fall":  { "frames": ["fall_00"], "fps": 1, "loop": true },
+  "land":  { "frames": ["land_00", "land_01", "idle_00"], "fps": 12, "loop": false }
 }
 ```
 
@@ -136,12 +146,45 @@ packs/<packId>/
 | `frames` | `(string \| {name, durationMs})[]` | 必須 | 1 以上 512 以下 |
 | `fps` | number | 8 | `durationMs` 指定フレームには適用されない |
 | `loop` | boolean | true | `false` なら再生完了で状態遷移をトリガ |
-| `moveSpeed` | number | 0 | 移動系状態でのみ使用 |
+| `moveSpeed` | number | 0 | 移動系状態でのみ使用。`climb` では垂直速度 |
 | `flipWhenFacingLeft` | boolean | true | 左向き時に水平反転する |
 | `events` | object[] | — | フレーム到達時の効果音。`sound` はパック内相対パスのみ |
 
-**必須アニメーション**: `idle`, `walk`, `drag`, `fall`。これらが無いパックは読み込みを拒否する。
-他はフォールバックする（例: `run` が無ければ `walk` を `moveSpeed` 2 倍で代用）。
+#### 認識されるアニメーション名
+
+エンジンが特別扱いする名前の一覧。**「必須」以外は無くても動く**が、あるほど生き物らしくなる。
+
+| 層 | 名前 | 用途 |
+|----|------|------|
+| **必須** | `idle` `walk` `drag` `fall` | これが無いパックは読み込みを拒否する |
+| **地形** | `climb` | 壁を登る（`cling`） |
+| | `hang` `hangMove` | 天井にぶら下がる／つたい歩き |
+| | `cornerOut` `cornerIn` | 凸角を回り込む／凹角に入る |
+| | `turn` | 端で引き返す |
+| | `dive` | 意味もなく飛び降りる（DESIGN.md §9.4） |
+| | `land` | 着地 |
+| **操作** | `pickup` | つままれた瞬間 |
+| | `shake` | ふられて目を回す |
+| | `headPat_soft` `headPat_happy` `headPat_bliss` | なでの3段階（DESIGN.md §10.1） |
+| | `sulk` | すねる |
+| **移動** | `run` `sit` `sleep` `peek` `look` | アンビエント |
+| **感情** | `happy` `surprised` `sweat` `yawn` `stretch` `tilt` `cheer` `wave` `point` | リアクション用 |
+
+#### フォールバック
+
+未定義のアニメーションは次の順に代替される。**代替も無ければその挙動自体を行わない**（例: `climb` が無いパックは壁を登らない）。
+
+| 未定義 | 代替 |
+|--------|------|
+| `run` | `walk` を `moveSpeed` 2 倍で再生 |
+| `hangMove` | `hang`（静止したままつたう） |
+| `cornerIn` / `cornerOut` / `turn` | 補間なしで即座に向き・接着を変更 |
+| `dive` | `fall` |
+| `pickup` | `drag` |
+| `headPat_happy` / `headPat_bliss` | 一段下のものへ、最終的に `happy` → `idle` |
+| `shake` | `drag` |
+| `land` | `idle` |
+| 感情系すべて | `idle` |
 
 ### 2.5 states — 振る舞いの遷移
 
@@ -163,20 +206,11 @@ packs/<packId>/
     "animation": "walk",
     "minDurationSec": 2,
     "maxDurationSec": 6,
-    "movement": "horizontal",     // "none" | "horizontal"
+    "movement": "surface",        // "none" | "surface"
     "next": [
       { "state": "idle", "weight": 60 },
       { "state": "run",  "weight": 15 },
       { "state": "walk", "weight": 25 }
-    ]
-  },
-  "sit": {
-    "animation": "sit",
-    "minDurationSec": 5,
-    "maxDurationSec": 30,
-    "next": [
-      { "state": "idle",  "weight": 70 },
-      { "state": "sleep", "weight": 30 }
     ]
   },
   "sleep": {
@@ -193,15 +227,23 @@ packs/<packId>/
 |-----------|------|
 | `animation` | 再生するアニメーション名 |
 | `min/maxDurationSec` | 滞在時間の一様乱数範囲。`loop:false` のアニメでは再生完了が優先 |
-| `movement` | `horizontal` なら `animation.moveSpeed` で移動する |
+| `movement` | `surface` なら**接着している面に沿って**移動する（床では水平、壁では垂直、天井では水平）。使うアニメは接着状態からエンジンが選ぶ |
 | `interruptible` | `false` なら Pri 2 未満の割り込みを拒否（既定 `true`） |
 | `effect` | 付随する内蔵エフェクト |
-| `next` | 遷移候補と重み。重みはエンジン側で文脈補正される（DESIGN.md §7.3） |
+| `next` | 遷移候補と重み。重みはエンジン側で文脈補正される（DESIGN.md §9.3） |
+| `minStage` | この状態がアンビエント遷移に現れる最低だいすき度（既定 1）。stage 5 の甘えるモーションなどに使う |
 
-**エンジン予約状態**: `drag` / `fall` / `land` / `climbEdge` / `hang` / `talk` / `react` は
-物理・入力・リアクションが直接制御するため `next` を書いても無視される。アニメーション定義だけ用意すればよい。
+**エンジン予約状態**: 次はエンジンが直接制御するため `next` を書いても無視される。対応するアニメーションだけ用意すればよい。
+
+```
+drag / shake / fall / land / dive / climb / hang / corner / headPat / talk / react
+```
 
 `states` には `idle` が必ず必要。遷移先に存在しない状態名を書いた場合は読み込みエラー。
+
+> **`movement: "surface"` について**: v1 では移動を「接着面に沿う」の一種類にまとめた。
+> 床用と壁用に別々の状態を書く必要はなく、`walk` 状態のままキャラは壁を登る（アニメだけ `climb` に切り替わる）。
+> パック作者は地形を意識せずに済む。
 
 ### 2.6 interactions — ユーザー操作への反応
 
@@ -209,15 +251,26 @@ packs/<packId>/
 "interactions": {
   "click":       { "play": "surprised", "say": "click", "cooldownSec": 3 },
   "doubleClick": { "play": "happy", "say": "pet", "cooldownSec": 5 },
-  "dragStart":   { "play": "drag" },
-  "dragEnd":     { "play": "fall" },
-  "hover":       { "play": "look", "cooldownSec": 10 }
+  "hover":       { "play": "look", "cooldownSec": 10 },
+
+  "headPat": {
+    "soft":   { "play": "headPat_soft" },
+    "happy":  { "play": "headPat_happy", "effect": "note" },
+    "bliss":  { "play": "headPat_bliss", "effect": "heart", "say": "pat_bliss" }
+  },
+
+  "pickup":    { "play": "pickup" },
+  "dragStart": { "play": "drag" },
+  "shake":     { "play": "shake", "effect": "dust", "say": "shake" },
+  "dragEnd":   { "play": "fall" },
+  "landed":    { "play": "land", "say": "landed", "cooldownSec": 20 }
 }
 ```
 
-`say` の値は `dialogue/<locale>.json` のキー。
+`headPat` の 3 段階はストローク数で切り替わる（2–3 / 4–7 / 8+、DESIGN.md §10.1）。
+`say` は `dialogue/<locale>.json` のキー。
 
-### 2.7 reactions — PC 状況への反応
+### 2.7 reactions — 状況への反応
 
 パックが定義できる**唯一の条件付きロジック**。宣言的で、評価はエンジンが行う。
 
@@ -254,12 +307,11 @@ packs/<packId>/
     "do": [{ "play": "wave" }, { "say": "welcome_back" }]
   },
   {
-    "id": "game-quiet",
-    "when": { "signal": "app.changed", "where": { "category": { "eq": "game" } } },
-    "priority": 1,
-    "cooldownSec": 60,
-    "silentOk": true,            // 発話しないので静音モードでも可
-    "do": [{ "moveTo": "cornerNearest" }, { "play": "sit" }]
+    "id": "break-time",
+    "when": { "signal": "pomodoro.breakStart" },
+    "priority": 3,
+    "cooldownSec": 0,
+    "do": [{ "play": "stretch" }, { "say": "break_start" }]
   }
 ]
 ```
@@ -276,6 +328,7 @@ packs/<packId>/
 | `{ "any": [ ... ] }` | いずれか真 |
 | `{ "not": { ... } }` | 否定 |
 | `{ "timeBetween": ["23:00", "05:00"] }` | 現在時刻が範囲内 |
+| `{ "minStage": 4 }` | だいすき度が 4 以上 |
 
 `where` の比較演算子: `eq` / `ne` / `gt` / `gte` / `lt` / `lte` / `in`。値はプリミティブと配列のみ。
 ネストの深さは 5 まで、1 パックあたりのルール数は 100 まで。
@@ -287,7 +340,7 @@ packs/<packId>/
 | `play` | アニメーション名 | 1 回再生して元の状態へ戻る |
 | `say` | セリフキー | 吹き出し表示（Governor の抑制対象） |
 | `effect` | 内蔵エフェクト名 | §2.9 |
-| `moveTo` | `cornerNearest` \| `cursor` \| `center` | 移動先。座標指定は不可 |
+| `moveTo` | `cornerNearest` \| `cursor` \| `center` \| `floor` | 移動先。座標指定は不可 |
 | `setState` | 状態名 | 指定状態へ遷移 |
 | `sound` | パック内相対パス | 効果音 |
 | `wait` | ミリ秒 (≤5000) | 次のアクションまでの待ち |
@@ -296,17 +349,25 @@ packs/<packId>/
 
 #### 利用可能なシグナル
 
-`cpu.high` / `cpu.sustainedHigh` / `cpu.calm` / `mem.high` /
-`battery.low` / `battery.critical` / `battery.charging` / `battery.full` /
-`time.hourly` / `time.morning` / `time.noon` / `time.evening` / `time.lateNight` /
-`user.away` / `user.back` /
-`session.lock` / `session.unlock` / `session.suspend` / `session.resume` /
-`app.changed` / `app.fullscreen` /
-`net.offline` / `net.online` /
-`display.changed`
+```
+cpu.high / cpu.sustainedHigh / cpu.calm / mem.high
+battery.low / battery.critical / battery.charging / battery.full
+time.hourly / time.morning / time.noon / time.evening / time.lateNight
+user.away / user.back
+session.lock / session.unlock / session.suspend / session.resume
+app.changed / app.fullscreen
+net.offline / net.online
+display.changed
+pomodoro.focusStart / pomodoro.breakStart / pomodoro.setDone
+alarm.fired
+affinity.stageUp
+```
 
-ペイロードは [DESIGN.md §9.1](./DESIGN.md#91-センサー一覧) の表に対応する
-（例: `app.changed` は `{ exe, title?, category }`、`user.back` は `{ awaySec }`、`cpu.*` は `{ percent }`）。
+ペイロードは [DESIGN.md §13.1](./DESIGN.md#131-センサー一覧) の表に対応する
+（例: `app.changed` は `{ exe, category }`、`user.back` は `{ awaySec }`、`cpu.*` は `{ percent }`、`affinity.stageUp` は `{ stage }`）。
+
+> `priority: 3`（タイマー由来）は Governor の発話上限をバイパスする。
+> **タイマー以外のシグナルに 3 を指定した場合は 2 に丸められる。** ここを開けると全てのルールが上限を無視できてしまうため。
 
 ### 2.8 personality — 素の性格
 
@@ -314,12 +375,13 @@ packs/<packId>/
 "personality": {
   "activity": 0.5,      // 0=じっとしている  1=動き回る
   "talkative": 0.4,     // 0=無口  1=よく喋る
-  "curiosity": 0.6,     // カーソルやウィンドウに寄っていく度合い
+  "curiosity": 0.6,     // カーソルやウィンドウに寄っていく度合い / 飛び降りやすさ
   "sleepiness": 0.5     // sleep への遷移しやすさ
 }
 ```
 
-`states` の重みに乗算される係数。エンジンの文脈補正（DESIGN.md §7.3）と合成される。
+`states` の重みに乗算される係数。エンジンの文脈補正（DESIGN.md §9.3）と合成される。
+`curiosity` は dive の発生確率にも掛かる（DESIGN.md §9.4）。
 
 ### 2.9 内蔵エフェクト
 
@@ -336,16 +398,22 @@ packs/<packId>/
   "locale": "ja",
   "lines": {
     "click":        ["わっ", "なあに？", "くすぐったいよ"],
-    "pet":          ["えへへ", "もっと〜"],
+    "pat_bliss":    ["しあわせ…", "とろける〜"],
     "cpu_high":     ["うわ、パソコンあつあつだよ…", "{{cpu}}%…がんばりすぎ！"],
     "battery_low":  ["そろそろ充電しよ？", "のこり{{batteryPercent}}%だよ"],
-    "welcome_back": ["おかえり！", "まってたよ〜"],
-    "late_night":   ["そろそろ寝よ…？", "もう{{hour}}時だよ"]
+
+    "welcome_back": [
+      "おかえり！",
+      { "text": "まってたよ〜", "minStage": 2 },
+      { "text": "{{userName}}、おかえり！さみしかった", "minStage": 5 }
+    ]
   }
 }
 ```
 
-- 値は配列。実行時にランダムで 1 本選ばれ、**直前に使ったものは連続で選ばれない**。
+- 値は配列。要素は**文字列**か `{ "text": ..., "minStage": n }`。
+- 実行時、**現在のだいすき度以下の行**からランダムに 1 本選ぶ。**直前に使ったものは連続で選ばれない**。
+- 行は消えない。stage が上がるほど語彙が増える（DESIGN.md §11.5）。
 - 1 行は 60 文字まで。超過分は切り詰められる。
 - プレースホルダは `{{name}}` 形式で、**エンジンが提供する変数のみ**展開される。未知の名前は空文字になる。
 
@@ -357,6 +425,8 @@ packs/<packId>/
 | `{{appName}}` | 前景アプリの表示名 |
 | `{{userName}}` | 設定で入力した呼び名（未設定なら「きみ」） |
 | `{{mascotName}}` | `mascot.json` の `name` |
+| `{{days}}` | 一緒に過ごした日数 |
+| `{{stage}}` | 現在のだいすき度 |
 
 ロケール解決は `設定のロケール → ja → 最初に見つかったファイル` の順。欠けたキーは他ロケールにフォールバックし、それも無ければ発話をスキップする。
 
@@ -374,12 +444,14 @@ packs/<packId>/
 | V4 | 必須アニメーション (`idle`/`walk`/`drag`/`fall`) が存在 |
 | V5 | 全 `frames` の名前がアトラスに存在 |
 | V6 | `states` に `idle` が存在し、全 `next.state` が定義済み |
-| V7 | `interactions` / `reactions` の `play` / `say` 参照先が存在 |
+| V7 | `interactions` / `reactions` の `play` / `say` / `effect` / `setState` 参照先が存在 |
 | V8 | 条件 DSL のネスト ≤ 5、ルール数 ≤ 100、アクション数 ≤ 8 |
 | V9 | 全ファイル参照がパックルート配下に正規化される（`..`・絶対パス・ドライブ指定・シンボリックリンクを拒否） |
 | V10 | 画像は PNG のみ、1 枚 4096×4096 以下 |
 | V11 | パック総容量 ≤ 64MB、総フレーム数 ≤ 512、音声 1 本 ≤ 512KB |
 | V12 | **JS/実行ファイルが含まれていない**（`.js` `.exe` `.dll` `.bat` `.ps1` 等を検出したら拒否） |
+| V13 | `headRegion` が 0–1 の範囲に収まる |
+| V14 | `minStage` が 1–6 の範囲 |
 
 V9 と V12 はセキュリティ上の必須要件で、緩めてはならない。
 
@@ -413,13 +485,14 @@ packs/minimal/
   "states": {
     "idle": { "animation": "idle", "minDurationSec": 2, "maxDurationSec": 6,
               "next": [{ "state": "walk", "weight": 50 }, { "state": "idle", "weight": 50 }] },
-    "walk": { "animation": "walk", "minDurationSec": 2, "maxDurationSec": 5, "movement": "horizontal",
+    "walk": { "animation": "walk", "minDurationSec": 2, "maxDurationSec": 5, "movement": "surface",
               "next": [{ "state": "idle", "weight": 100 }] }
   }
 }
 ```
 
-`dialogue` が無いパックは一切喋らない（それも仕様として正しい）。
+このパックは床の上を歩き、つかんで投げられる。壁は登らず（`climb` が無い）、喋らない（`dialogue` が無い）。
+それも仕様として正しい。**必須の 4 アニメだけで成立する**ことが、パック作りの敷居を下げる。
 
 ---
 
