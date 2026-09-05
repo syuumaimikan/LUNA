@@ -21,9 +21,24 @@ def slug(heading: str) -> str:
     )
     return s.lower().replace(' ', '-')
 
+# 検査対象から外すディレクトリ（依存パッケージやビルド成果物の README まで拾わない）
+EXCLUDED_DIRS = {'node_modules', 'out', 'dist', 'coverage', '.git', '.venv'}
+
+
+def project_markdown_files():
+    """リポジトリ自身の .md だけを列挙する。"""
+    out = []
+    for dirpath, dirnames, filenames in os.walk(ROOT):
+        dirnames[:] = [d for d in dirnames if d not in EXCLUDED_DIRS]
+        for fn in filenames:
+            if fn.endswith('.md'):
+                out.append(os.path.relpath(os.path.join(dirpath, fn), ROOT))
+    return sorted(out)
+
+
 def check_links(errors):
     anchors = {}
-    files = [os.path.relpath(p, ROOT) for p in glob.glob(os.path.join(ROOT, '**/*.md'), recursive=True)]
+    files = project_markdown_files()
     for f in files:
         text = open(os.path.join(ROOT, f), encoding='utf-8').read()
         anchors[os.path.normpath(f)] = {slug(m) for m in re.findall(r'^#{1,6}\s+(.*)$', text, re.M)}

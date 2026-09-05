@@ -66,3 +66,34 @@ export function parseHhMm(v: string): number | null {
 export function isWithinRange(nowMin: number, from: number, to: number): boolean {
   return from <= to ? nowMin >= from && nowMin < to : nowMin >= from || nowMin < to
 }
+
+/** エポックミリ秒を ISO 8601 文字列にする。 */
+export function toIsoString(ms: number): string {
+  return new Date(ms).toISOString()
+}
+
+/** ISO 8601 文字列をエポックミリ秒に。解釈できなければ null。 */
+export function parseIso(iso: string): number | null {
+  const v = Date.parse(iso)
+  return Number.isNaN(v) ? null : v
+}
+
+/** 暦日 (YYYY-MM-DD) をエポックミリ秒 (UTC 0時) に。解釈できなければ null。 */
+export function parseCalendarDate(day: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null
+  const v = Date.parse(`${day}T00:00:00Z`)
+  return Number.isNaN(v) ? null : v
+}
+
+/** b が a の翌日か。連続日数の判定に使う。 */
+export function isNextCalendarDay(a: string, b: string): boolean {
+  const from = parseCalendarDate(a)
+  const to = parseCalendarDate(b)
+  if (from === null || to === null) return false
+  return to - from === 86_400_000
+}
+
+/** 経過日数（1 日目を 1 と数える）。 */
+export function daysSince(fromMs: number, nowMs: number): number {
+  return Math.max(1, Math.floor((nowMs - fromMs) / 86_400_000) + 1)
+}
