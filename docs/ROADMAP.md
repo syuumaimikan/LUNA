@@ -9,14 +9,19 @@
 
 ---
 
+> **現在地**: M0 完了。M2–M5 のうち**ヘッドレスで検証できる純粋ロジックは実装済み**で、
+> 単体・結合あわせて 316 テストが通っている。
+> 残るのは Electron のウィンドウ・PixiJS 描画・koffi 束縛・React 設定 UI・作画で、
+> いずれも Windows 実機での確認が要る。チェックが付いていない項目がそれにあたる。
+
 ## M0 — 土台
 
 **目標**: 空のプロジェクトが `npm run dev` で起動し、CI が通る。
 
-- [ ] electron-vite + TypeScript(strict) + ESLint/Prettier の雛形
-- [ ] `src/shared/types` と `src/shared/ipc/channels.ts` の骨組み
-- [ ] `Clock` / `Rng` インターフェース（DESIGN.md §20 のテスト決定論化の前提）
-- [ ] Vitest 設定、GitHub Actions（lint + typecheck + unit）
+- [x] electron-vite + TypeScript(strict) + ESLint/Prettier の雛形
+- [x] `src/shared/types` と `src/shared/ipc/channels.ts` の骨組み
+- [x] `Clock` / `Rng` インターフェース（DESIGN.md §20 のテスト決定論化の前提）
+- [x] Vitest 設定、GitHub Actions（lint + typecheck + unit）
 - [ ] electron-builder 設定（NSIS + portable、未署名）
 - [x] ドキュメント／パック整合性チェック（`scripts/check-docs.py`）— 内部リンクと検証 V3–V14 のうち静的に効くものを検査済み。`npm run check:docs` として CI に載せる
 
@@ -30,7 +35,9 @@
 
 - [ ] `OverlayWindowManager`: ディスプレイ毎の透過・クリックスルー窓（DESIGN.md §5.1）
 - [ ] PixiJS 初期化、`AnimationPlayer`
-- [ ] `PackManager` + zod スキーマ + `AlphaMaskBuilder`（読込時のマスク事前展開）
+- [x] zod スキーマとパック検証 V1–V14（`PackSchema.ts` / `validatePack.ts`）
+- [ ] `PackManager`（ファイル読込・パック一覧・エラー集約）
+- [ ] `AlphaMaskBuilder`（読込時のマスク事前展開）
 - [ ] `HitTester`（per-pixel + ヒステリシス、DESIGN.md §5.3）
 - [ ] **作画 段階1**: 待機・歩行・つかむ・落ちる（`packs/luna/sprites/README.md` の「描く順番」参照）
 - [ ] 適応フレームレート（DESIGN.md §6.4）
@@ -46,11 +53,11 @@ GPU ちらつきの検証を複数マシンで行うこと。
 
 **目標**: 床の上で生き物らしく振る舞い、触って気持ちいい。
 
-- [ ] `BehaviorFSM`（重み付き遷移、優先度調停、DESIGN.md §9.1–9.2）
-- [ ] `Physics`（固定タイムステップ、重力・反発・摩擦、DESIGN.md §8）
-- [ ] `TerrainMap` の骨格（**この段階ではディスプレイ由来の床のみ**）
-- [ ] `DragController`（投げ速度のサンプリング、ポインタキャプチャ）
-- [ ] **`GestureRecognizer`（なで・ふる、DESIGN.md §10.1–10.2）**
+- [x] `BehaviorFSM`（重み付き遷移、優先度調停、DESIGN.md §9.1–9.2）
+- [x] `Physics`（固定タイムステップ、重力・反発・摩擦、DESIGN.md §8）
+- [x] `TerrainMap` の骨格（**この段階ではディスプレイ由来の床のみ**）
+- [x] `DragController`（投げ速度のサンプリング、ポインタキャプチャ）
+- [x] **`GestureRecognizer`（なで・ふる、DESIGN.md §10.1–10.2）**
 - [ ] `TrayController` と最小限のメニュー（呼ぶ / 隠す / 終了）
 - [ ] マルチディスプレイの Actor Handoff（DESIGN.md §4.1）
 - [ ] **作画 段階3**: なでなで3段階・ふる
@@ -67,12 +74,12 @@ GPU ちらつきの検証を複数マシンで行うこと。
 **目標**: 参照作品の芯。ウィンドウを登り、ぶら下がり、意味もなく飛び降りる。
 
 - [ ] `Win32Bridge`（koffi: `EnumWindows` / `GetWindowRect` / `GetForegroundWindow` / `GetWindowLong` / `DwmGetWindowAttribute`）
-- [ ] `TerrainService`: ウィンドウ矩形 → 4 種の面（DESIGN.md §7.1–7.2）
-- [ ] **除外フィルタ**（DWM クローク・ツールウィンドウ・最小化・自窓）— これを怠ると地形がゴミだらけになる
-- [ ] 遮蔽フィルタ、差分送信（`terrain:patch`）
-- [ ] `Locomotion`: 接着（stand / cling / hang）と面に沿った移動（DESIGN.md §7.4）
-- [ ] **コーナー遷移**（乗り換え / 角を曲がる / dive / 引き返す、DESIGN.md §7.5）
-- [ ] 面の移動追従と消滅時の落下（DESIGN.md §7.6）
+- [x] `TerrainService`: ウィンドウ矩形 → 4 種の面（DESIGN.md §7.1–7.2）
+- [x] **除外フィルタ**（DWM クローク・ツールウィンドウ・最小化・自窓）— これを怠ると地形がゴミだらけになる
+- [x] 遮蔽フィルタ、差分送信（`terrain:patch`）
+- [x] `Locomotion`: 接着（stand / cling / hang）と面に沿った移動（DESIGN.md §7.4）
+- [x] **コーナー遷移**（乗り換え / 角を曲がる / dive / 引き返す、DESIGN.md §7.5）
+- [x] 面の移動追従と消滅時の落下（DESIGN.md §7.6）
 - [ ] `ForegroundWatcher` + 全画面検出と自動退避（DESIGN.md §9.6）
 - [ ] **作画 段階2**: `climb` / `hang` / `hangMove` / `cornerOut` / `cornerIn` / `turn` / `dive`
 
@@ -93,11 +100,11 @@ GPU ちらつきの検証を複数マシンで行うこと。
 **目標**: 参照作品には無い独自要素を入れる。
 
 - [ ] `SensorHub` + 各ソース（CPU / メモリ / バッテリ / 時刻 / 無操作 / セッション / ネットワーク / 前景アプリ）
-- [ ] `Normalizer`（EMA・シュミットトリガ・エッジ検出、DESIGN.md §13.2）
-- [ ] `ReactionEngine` + 条件 DSL 評価器
-- [ ] `Governor`（クールダウン・発話上限・静音モード、DESIGN.md §13.3）
+- [x] `Normalizer`（EMA・シュミットトリガ・エッジ検出、DESIGN.md §13.2）
+- [x] `ReactionEngine` + 条件 DSL 評価器
+- [x] `Governor`（クールダウン・発話上限・静音モード、DESIGN.md §13.3）
 - [ ] `SpeechBubble`（DOM 層、文字送り、画面端反転、**壁・天井での向き調整**）
-- [ ] `dialogue` のプレースホルダ展開
+- [x] `dialogue` のプレースホルダ展開
 - [ ] アプリカテゴリ分類表
 - [ ] **作画 段階4**: 感情・リアクション
 
@@ -112,12 +119,12 @@ GPU ちらつきの検証を複数マシンで行うこと。
 
 **目標**: 長く一緒にいる理由を作る。
 
-- [ ] `AffinityService`（6 段階、加点上限、日付跨ぎ、DESIGN.md §11）
+- [x] `AffinityService`（6 段階、加点上限、日付跨ぎ、DESIGN.md §11）
 - [ ] `AffinityStore`（`affinity.json`、設定とは別ファイル）
-- [ ] セリフの `minStage` 解禁、状態の `minStage`
-- [ ] `TimerService`: ポモドーロ（自律的な作業/休憩の切替、DESIGN.md §12.1）
-- [ ] アラーム（3 段階の主張度、サイレン + 走り回り、スヌーズ）
-- [ ] Governor の Pri 3 バイパス、静音モードの尊重
+- [x] セリフの `minStage` 解禁、状態の `minStage`
+- [x] `TimerService`: ポモドーロ（自律的な作業/休憩の切替、DESIGN.md §12.1）
+- [x] アラーム（3 段階の主張度、サイレン + 走り回り、スヌーズ）
+- [x] Governor の Pri 3 バイパス、静音モードの尊重
 - [ ] 進捗バー表示
 - [ ] **作画 段階5**: 休息・だいすき度解禁モーション
 

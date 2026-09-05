@@ -29,6 +29,20 @@ export interface AlarmSpec {
   days: number[]
 }
 
+/** 鳴っているアラーム。クリックで止めるまで保持する。 */
+export interface RingingAlarm {
+  id: string
+  label: string
+  intensity: AlarmSpec['intensity']
+  /** 発火からの経過秒 */
+  elapsedSec: number
+  /** 主張度が自動的に落とされたか (DESIGN.md §12.2) */
+  softened: boolean
+}
+
+/** 主張の強いアラームを自動的に静める猶予 (DESIGN.md §12.2)。 */
+export const ALARM_SOFTEN_AFTER_SEC = 300
+
 export type TimerEvent =
   | { type: 'pomodoro.focusStart'; setIndex: number }
   | { type: 'pomodoro.breakStart'; long: boolean }
@@ -58,6 +72,9 @@ export class TimerService {
   private alarms: AlarmSpec[] = []
   /** 同じ分に二重発火しないための記録 */
   private readonly firedAt = new Map<string, string>()
+  private ringing: { spec: AlarmSpec; since: number; softened: boolean } | null = null
+  private readonly snoozeUntil = new Map<string, number>()
+  private snoozeMin = 5
 
   constructor(
     private readonly clock: Clock,
@@ -72,6 +89,39 @@ export class TimerService {
 
   setAlarms(alarms: AlarmSpec[]): void {
     this.alarms = alarms
+  }
+
+  setSnoozeMinutes(min: number): void {
+    this.snoozeMin = min
+  }
+
+  /** 鳴っているアラーム。無ければ null。 */
+  get ringingAlarm(): RingingAlarm | null {
+    if (!this.ringing) return null
+    const elapsedSec = Math.floor((this.clock.now() - this.ringing.since) / 1000)
+    return {
+      id: this.ringing.spec.id,
+      label: this.ringing.spec.label,
+      // 猶予を過ぎたら主張度を落とす。無限に走り回らせない
+      intensity: this.ringing.softened ? 'quiet' : this.ringing.spec.intensity,
+      elapsedSec,
+      softened: this.ringing.softened,
+    }
+  }
+
+  /** クリックで停止。 */
+  dismissAlarm(): void {
+    this.ringing = null
+  }
+
+  /** スヌーズ。指定分だけ後に鳴り直す。 */
+  snoozeAlarm(): void {
+    if (!this.ringing) return
+    const spec = this.ringing.spec
+    this.ringing = null
+    // 次に鳴る時刻を firedAt から外して、スヌーズ後に再発火できるようにする
+    this.firedAt.delete(spec.id)
+    this.snoozeUntil.set(spec.id, this.clock.now() + this.snoozeMin * 60_000)
   }
 
   get state(): PomodoroState {
@@ -110,6 +160,12 @@ export class TimerService {
     this.mode = 'off'
     this.endsAt = 0
     this.completedSets = 0
+  }
+
+  /** ディスプレイが全画面アプリに覆われているか。アラームの出し方を変える。 */
+  shouldSuppressAlarmVisuals(fullscreenActive: boolean): boolean {
+    // 全画面中は音だけ鳴らし、キャラは出てこない (DESIGN.md §12.2)
+    return fullscreenActive
   }
 
   /** 現在の区間を飛ばして次へ。 */
@@ -156,6 +212,23 @@ export class TimerService {
 
   private tickAlarms(): TimerEvent[] {
     const out: TimerEvent[] = []
+    const now = this.clock.now()
+
+    // 鳴りっぱなしを一定時間で静める
+    if (this.ringing && !this.ringing.softened) {
+      if (now - this.ringing.since >= ALARM_SOFTEN_AFTER_SEC * 1000) this.ringing.softened = true
+    }
+
+    // スヌーズの満了
+    for (const [id, at] of [...this.snoozeUntil]) {
+      if (now < at) continue
+      this.snoozeUntil.delete(id)
+      const spec = this.alarms.find((a) => a.id === id)
+      if (!spec || !spec.enabled) continue
+      this.ringing = { spec, since: now, softened: false }
+      out.push({ type: 'alarm.fired', id: spec.id, label: spec.label, intensity: spec.intensity })
+    }
+
     const today = this.clock.today()
     const nowMin = this.clock.minutesOfDay()
     // 曜日は暦日から求める（Clock は曜日を持たないので日付から導く）
@@ -173,6 +246,7 @@ export class TimerService {
       if (this.firedAt.get(a.id) === key) continue
       this.firedAt.set(a.id, key)
 
+      this.ringing = { spec: a, since: now, softened: false }
       out.push({ type: 'alarm.fired', id: a.id, label: a.label, intensity: a.intensity })
     }
     return out

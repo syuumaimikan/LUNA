@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { FakeClock } from '../../src/shared/time.js'
 import {
+  ALARM_SOFTEN_AFTER_SEC,
   dayOfWeek,
   POMODORO_DEFAULTS,
   TimerService,
@@ -284,5 +285,101 @@ describe('dayOfWeek', () => {
   it('不正な形式は null', () => {
     expect(dayOfWeek('2026-1-5')).toBeNull()
     expect(dayOfWeek('nope')).toBeNull()
+  })
+})
+
+describe('アラームの停止・スヌーズ・自動沈静 (DESIGN §12.2)', () => {
+  const alarm = (over: Partial<AlarmSpec> = {}): AlarmSpec => ({
+    id: 'a1',
+    time: '09:30',
+    label: '休憩',
+    intensity: 'loud',
+    enabled: true,
+    days: [],
+    ...over,
+  })
+
+  it('発火すると鳴り続ける', () => {
+    const { t } = svc('2026-01-05T09:30:00')
+    t.setAlarms([alarm()])
+    t.tick()
+    expect(t.ringingAlarm).toMatchObject({ id: 'a1', intensity: 'loud', softened: false })
+  })
+
+  it('クリックで止まる', () => {
+    const { t } = svc('2026-01-05T09:30:00')
+    t.setAlarms([alarm()])
+    t.tick()
+    t.dismissAlarm()
+    expect(t.ringingAlarm).toBeNull()
+  })
+
+  it('5 分放置すると自動的に静かになる（無限に走り回らせない）', () => {
+    const { clock, t } = svc('2026-01-05T09:30:00')
+    t.setAlarms([alarm()])
+    t.tick()
+
+    clock.advance(ALARM_SOFTEN_AFTER_SEC - 1)
+    t.tick()
+    expect(t.ringingAlarm?.intensity).toBe('loud')
+
+    clock.advance(2)
+    t.tick()
+    expect(t.ringingAlarm).toMatchObject({ intensity: 'quiet', softened: true })
+  })
+
+  it('スヌーズすると指定分だけ後に鳴り直す', () => {
+    const { clock, t } = svc('2026-01-05T09:30:00')
+    t.setSnoozeMinutes(5)
+    t.setAlarms([alarm()])
+    t.tick()
+
+    t.snoozeAlarm()
+    expect(t.ringingAlarm).toBeNull()
+
+    clock.advance(4 * 60)
+    expect(t.tick()).toEqual([])
+    expect(t.ringingAlarm).toBeNull()
+
+    clock.advance(2 * 60)
+    expect(types(t.tick())).toEqual(['alarm.fired'])
+    expect(t.ringingAlarm?.id).toBe('a1')
+  })
+
+  it('スヌーズ間隔を変えられる', () => {
+    const { clock, t } = svc('2026-01-05T09:30:00')
+    t.setSnoozeMinutes(1)
+    t.setAlarms([alarm()])
+    t.tick()
+    t.snoozeAlarm()
+
+    clock.advance(70)
+    expect(types(t.tick())).toEqual(['alarm.fired'])
+  })
+
+  it('スヌーズ中に無効化されたら鳴らない', () => {
+    const { clock, t } = svc('2026-01-05T09:30:00')
+    t.setAlarms([alarm()])
+    t.tick()
+    t.snoozeAlarm()
+
+    t.setAlarms([alarm({ enabled: false })])
+    clock.advance(6 * 60)
+    expect(t.tick()).toEqual([])
+  })
+
+  it('鳴っていないときのスヌーズは何もしない', () => {
+    const { clock, t } = svc('2026-01-05T09:00:00')
+    t.setAlarms([alarm()])
+    t.snoozeAlarm()
+    clock.advance(10 * 60)
+    // 09:10 なので通常の発火時刻でもない
+    expect(t.tick()).toEqual([])
+  })
+
+  it('全画面中はキャラを出さない判断ができる', () => {
+    const { t } = svc()
+    expect(t.shouldSuppressAlarmVisuals(true)).toBe(true)
+    expect(t.shouldSuppressAlarmVisuals(false)).toBe(false)
   })
 })
