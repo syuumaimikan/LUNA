@@ -1,0 +1,35 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+out/
+release/
+*.tsbuildinfo
+
+# electron-builder
+build/
+!build/icons/
+
+# logs
+*.log
+npm-debug.log*
+logs/
+
+# editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# local config
+.env
+.env.local
+*.local
+
+# test artifacts
+coverage/
+playwright-report/
+test-results/

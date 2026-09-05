@@ -1,0 +1,247 @@
+{
+  "schemaVersion": 1,
+  "id": "luna",
+  "name": "ルナ",
+  "author": "syuumaimikan",
+  "version": "1.0.0",
+  "license": "CC-BY-4.0",
+  "description": "月みたいにのんびりした子。作業中はそっと見守り、疲れていると気づいてくれる。",
+
+  "display": {
+    "baseHeight": 128,
+    "anchor": { "x": 0.5, "y": 1.0 },
+    "footOffset": 2,
+    "hitPadding": 3
+  },
+
+  "sprite": {
+    "atlases": [
+      { "scale": 1, "image": "sprites/luna@1x.png", "data": "sprites/luna@1x.json" },
+      { "scale": 2, "image": "sprites/luna@2x.png", "data": "sprites/luna@2x.json" }
+    ],
+    "scaleMode": "nearest"
+  },
+
+  "animations": {
+    "idle": {
+      "frames": [
+        { "name": "idle_00", "durationMs": 1800 },
+        { "name": "idle_01", "durationMs": 220 },
+        { "name": "blink_00", "durationMs": 70 },
+        { "name": "blink_01", "durationMs": 60 },
+        { "name": "idle_01", "durationMs": 200 }
+      ],
+      "loop": true
+    },
+    "look": { "frames": ["look_00", "look_01", "look_02", "look_01"], "fps": 5, "loop": true },
+    "walk": {
+      "frames": ["walk_00", "walk_01", "walk_02", "walk_03"],
+      "fps": 10,
+      "loop": true,
+      "moveSpeed": 42,
+      "events": [
+        { "atFrame": 0, "sound": "sounds/step.ogg", "volume": 0.25 },
+        { "atFrame": 2, "sound": "sounds/step.ogg", "volume": 0.25 }
+      ]
+    },
+    "run":  { "frames": ["run_00", "run_01", "run_02", "run_03"], "fps": 14, "loop": true, "moveSpeed": 110 },
+    "sit":  { "frames": ["sit_00", "sit_01"], "fps": 3, "loop": true },
+    "sleep": { "frames": ["sleep_00", "sleep_01"], "fps": 2, "loop": true },
+    "peek": { "frames": ["peek_00", "peek_01"], "fps": 4, "loop": true },
+
+    "drag": { "frames": ["drag_00", "drag_01"], "fps": 8, "loop": true },
+    "fall": { "frames": ["fall_00"], "fps": 1, "loop": true },
+    "land": { "frames": ["land_00", "land_01", "idle_00"], "fps": 12, "loop": false },
+    "climbEdge": { "frames": ["climb_00", "climb_01", "climb_02"], "fps": 8, "loop": true },
+    "hang": { "frames": ["hang_00", "hang_01"], "fps": 3, "loop": true },
+
+    "wave":      { "frames": ["wave_00", "wave_01", "wave_02", "wave_01"], "fps": 8, "loop": false },
+    "happy":     { "frames": ["happy_00", "happy_01", "happy_00"], "fps": 8, "loop": false },
+    "surprised": { "frames": ["surprised_00", "surprised_01"], "fps": 10, "loop": false },
+    "sweat":     { "frames": ["sweat_00", "sweat_01"], "fps": 5, "loop": false },
+    "point":     { "frames": ["point_00", "point_01"], "fps": 6, "loop": false },
+    "yawn":      { "frames": ["yawn_00", "yawn_01", "yawn_02"], "fps": 4, "loop": false },
+    "stretch":   { "frames": ["stretch_00", "stretch_01", "stretch_02"], "fps": 6, "loop": false },
+    "tilt":      { "frames": ["tilt_00", "tilt_01"], "fps": 4, "loop": false },
+    "cheer":     { "frames": ["cheer_00", "cheer_01"], "fps": 10, "loop": false }
+  },
+
+  "states": {
+    "idle": {
+      "animation": "idle",
+      "minDurationSec": 3,
+      "maxDurationSec": 10,
+      "next": [
+        { "state": "walk", "weight": 35 },
+        { "state": "look", "weight": 25 },
+        { "state": "sit",  "weight": 20 },
+        { "state": "peek", "weight": 5 },
+        { "state": "idle", "weight": 15 }
+      ]
+    },
+    "look": {
+      "animation": "look",
+      "minDurationSec": 2,
+      "maxDurationSec": 5,
+      "next": [
+        { "state": "idle", "weight": 60 },
+        { "state": "walk", "weight": 40 }
+      ]
+    },
+    "walk": {
+      "animation": "walk",
+      "minDurationSec": 2,
+      "maxDurationSec": 7,
+      "movement": "horizontal",
+      "next": [
+        { "state": "idle", "weight": 55 },
+        { "state": "run",  "weight": 10 },
+        { "state": "walk", "weight": 35 }
+      ]
+    },
+    "run": {
+      "animation": "run",
+      "minDurationSec": 1,
+      "maxDurationSec": 3,
+      "movement": "horizontal",
+      "next": [
+        { "state": "idle", "weight": 70 },
+        { "state": "walk", "weight": 30 }
+      ]
+    },
+    "sit": {
+      "animation": "sit",
+      "minDurationSec": 6,
+      "maxDurationSec": 40,
+      "next": [
+        { "state": "idle",  "weight": 70 },
+        { "state": "sleep", "weight": 30 }
+      ]
+    },
+    "sleep": {
+      "animation": "sleep",
+      "minDurationSec": 30,
+      "maxDurationSec": 300,
+      "effect": "zzz",
+      "next": [{ "state": "idle", "weight": 100 }]
+    },
+    "peek": {
+      "animation": "peek",
+      "minDurationSec": 3,
+      "maxDurationSec": 8,
+      "next": [{ "state": "idle", "weight": 100 }]
+    }
+  },
+
+  "interactions": {
+    "click":       { "play": "surprised", "say": "click", "cooldownSec": 3 },
+    "doubleClick": { "play": "happy", "say": "pet", "cooldownSec": 6 },
+    "dragStart":   { "play": "drag" },
+    "dragEnd":     { "play": "fall" },
+    "hover":       { "play": "look", "cooldownSec": 15 }
+  },
+
+  "reactions": [
+    {
+      "id": "cpu-hot",
+      "when": { "signal": "cpu.sustainedHigh" },
+      "priority": 1,
+      "cooldownSec": 900,
+      "silentOk": false,
+      "do": [
+        { "play": "sweat" },
+        { "effect": "sweat" },
+        { "say": "cpu_high" }
+      ]
+    },
+    {
+      "id": "cpu-calm",
+      "when": { "signal": "cpu.calm" },
+      "priority": 1,
+      "cooldownSec": 1800,
+      "silentOk": true,
+      "do": [{ "play": "stretch" }]
+    },
+    {
+      "id": "battery-low",
+      "when": {
+        "all": [
+          { "signal": "battery.low" },
+          { "not": { "signal": "battery.charging" } }
+        ]
+      },
+      "priority": 2,
+      "cooldownSec": 1800,
+      "silentOk": false,
+      "do": [{ "play": "point" }, { "say": "battery_low" }]
+    },
+    {
+      "id": "battery-charging",
+      "when": { "signal": "battery.charging" },
+      "priority": 1,
+      "cooldownSec": 600,
+      "silentOk": true,
+      "do": [{ "play": "cheer" }, { "effect": "sparkle" }]
+    },
+    {
+      "id": "welcome-back",
+      "when": { "signal": "user.back", "where": { "awaySec": { "gte": 1800 } } },
+      "priority": 1,
+      "cooldownSec": 300,
+      "silentOk": false,
+      "do": [{ "play": "wave" }, { "say": "welcome_back" }]
+    },
+    {
+      "id": "unlock-stretch",
+      "when": { "signal": "session.unlock" },
+      "priority": 1,
+      "cooldownSec": 300,
+      "silentOk": true,
+      "do": [{ "play": "stretch" }]
+    },
+    {
+      "id": "late-night",
+      "when": {
+        "all": [
+          { "signal": "time.lateNight" },
+          { "timeBetween": ["01:00", "04:00"] }
+        ]
+      },
+      "priority": 1,
+      "cooldownSec": 3600,
+      "silentOk": false,
+      "do": [{ "play": "yawn" }, { "say": "late_night" }]
+    },
+    {
+      "id": "focus-game",
+      "when": { "signal": "app.changed", "where": { "category": { "in": ["game", "meeting"] } } },
+      "priority": 1,
+      "cooldownSec": 60,
+      "silentOk": true,
+      "do": [{ "moveTo": "cornerNearest" }, { "wait": 400 }, { "setState": "sit" }]
+    },
+    {
+      "id": "offline",
+      "when": { "signal": "net.offline" },
+      "priority": 1,
+      "cooldownSec": 600,
+      "silentOk": true,
+      "do": [{ "play": "tilt" }, { "effect": "question" }]
+    },
+    {
+      "id": "morning-greet",
+      "when": { "signal": "time.morning" },
+      "priority": 1,
+      "cooldownSec": 43200,
+      "silentOk": false,
+      "do": [{ "play": "wave" }, { "say": "morning" }]
+    }
+  ],
+
+  "personality": {
+    "activity": 0.45,
+    "talkative": 0.4,
+    "curiosity": 0.6,
+    "sleepiness": 0.6
+  }
+}
