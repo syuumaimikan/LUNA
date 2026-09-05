@@ -4,6 +4,30 @@ export interface Vec2 {
   y: number
 }
 
+/** 軸平行な矩形。left/top を含み、right/bottom は含まない。 */
+export interface Rect {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+export const rectWidth = (r: Rect): number => r.right - r.left
+export const rectHeight = (r: Rect): number => r.bottom - r.top
+
+export function rectContains(outer: Rect, inner: Rect): boolean {
+  return (
+    outer.left <= inner.left &&
+    outer.top <= inner.top &&
+    outer.right >= inner.right &&
+    outer.bottom >= inner.bottom
+  )
+}
+
+export function rectIntersects(a: Rect, b: Rect): boolean {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
+}
+
 /**
  * 面の種類 (DESIGN.md §7.1)。
  * どちら側に接着できるかを表す。`floor` は上、`ceiling` は下、
